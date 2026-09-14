@@ -193,6 +193,10 @@
     background:#fffaf0;border:1px solid #f3ddb4;border-radius:10px;padding:10px 12px;
     font-size:.85rem;color:#8a6420;margin-bottom:14px;line-height:1.6;
   }
+  .r-note{
+    background:#eef7f5;border:1px solid #cfe8e2;border-radius:10px;padding:10px 12px;
+    font-size:.82rem;color:#2f6b5f;margin-bottom:14px;line-height:1.6;
+  }
   .r-unit{
     border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fbfdfc;
   }
@@ -268,6 +272,9 @@
       <span id="speedVal">0.9x</span>
     </label>
     <select id="voiceSel" title="发音引擎（默认自动选择韩语语音）"></select>
+    <button class="btn" id="backupBtn" title="导出学习数据备份文件（收藏/生词本/复习记录，可安全保存）">💾 备份数据</button>
+    <button class="btn" id="restoreBtn" title="从备份文件恢复学习数据">📥 恢复备份</button>
+    <input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
     <button class="btn-primary" id="quizBtn">🎮 闯关模式</button>
     <button class="btn-amber" id="reviewBtn">📅 复习计划</button>
   </div>
@@ -355,6 +362,7 @@
       记忆曲线间隔：学习后 <b>第 1 天 → 第 2 天 → 第 4 天 → 第 7 天 → 第 15 天 → 第 30 天</b> 复习巩固；
       标记「已掌握」后每 30 天自动提醒巩固一次。每张卡片可标记「🔄 学习/复习」推进进度、「⏰ 待复习」加入今日任务、「✅ 已掌握」完成该词。
     </div>
+    <div class="r-note">📌 学习数据保存在本浏览器本地（收藏/生词本/已掌握/复习计划/学习时长），关闭页面不会丢失，本页面不会自动清除任何记录。如需安全保管，请用顶部工具栏「💾 备份数据」导出文件保存；换电脑或清理浏览器后可「📥 恢复备份」。</div>
     <div id="rUnits"></div>
   </div>
 </div>
@@ -403,17 +411,73 @@ const DEFAULTS = {
   study:{totalSec:0, days:{}},
   settings:{speed:0.9, roma:true, voice:"", hideRomaQuiz:false, selfTest:""}
 };
+const LS_KEY = "krVocab_v1";
+const LS_BAK = "krVocab_v1_bak";
 let state = loadState();
 function loadState(){
+  for(const key of [LS_KEY, LS_BAK]){
   try{
-    const s = JSON.parse(localStorage.getItem("krVocab_v1"));
-    if(s && typeof s==="object" && s.study){
+    const s = JSON.parse(localStorage.getItem(key));
+    if(s && typeof s==="object" && s.study && typeof s.study==="object"){
       return Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), s);
     }
   }catch(e){}
+  }
   return JSON.parse(JSON.stringify(DEFAULTS));
 }
-function saveState(){ localStorage.setItem("krVocab_v1", JSON.stringify(state)); }
+function saveState(){
+  const data = JSON.stringify(state);
+  try{
+    localStorage.setItem(LS_KEY, data);
+    localStorage.setItem(LS_BAK, data);
+  }catch(e){
+    try{ localStorage.setItem(LS_KEY, data); }catch(e2){}
+  }
+}
+function exportBackup(){
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "韩语学习数据备份_" + todayStr() + ".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  toast("已导出备份文件（含全部学习记录）");
+}
+function importBackup(file){
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    try{
+      const s = JSON.parse(ev.target.result);
+      if(!s || typeof s!=="object" || !s.study || typeof s.study!=="object"){
+        toast("备份文件格式不正确，无法恢复"); return;
+      }
+      localStorage.setItem(LS_KEY, JSON.stringify(s));
+      localStorage.setItem(LS_BAK, JSON.stringify(s));
+      state = Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), s);
+      render(); renderTabs(); renderUnitSel(); updateStats();
+      const st = $("#selfTestMode");
+      if(st){
+        st.value = state.settings.selfTest || "";
+        document.body.classList.remove("self-test-cn","self-test-kr");
+        if(state.settings.selfTest) document.body.classList.add("self-test-"+state.settings.selfTest);
+      }
+      $("#romaToggle").checked = state.settings.roma !== false;
+      document.getElementById("cards").classList.toggle("no-roma", state.settings.roma === false);
+      $("#speedSlider").value = state.settings.speed;
+      $("#speedVal").textContent = state.settings.speed+"x";
+      $("#qHideRoma").checked = !!state.settings.hideRomaQuiz;
+      applyQuizRoma();
+      toast("备份已恢复，学习记录已更新");
+    }catch(err){
+      toast("恢复失败：文件无法解析");
+    }
+  };
+  reader.readAsText(file);
+}
 
 function getReview(i){ return state.review[i] || null; }
 function isDue(i){
@@ -681,6 +745,12 @@ function bindEvents(){
   });
   $("#voiceSel").addEventListener("change", e=>{
     state.settings.voice = e.target.value; saveState();
+  });
+  $("#backupBtn").addEventListener("click", exportBackup);
+  $("#restoreBtn").addEventListener("click", ()=>$("#restoreFile").click());
+  $("#restoreFile").addEventListener("change", e=>{
+    if(e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
+    e.target.value = "";
   });
   $("#showAllDef").addEventListener("click", ()=>{
     $$(".card").forEach(c=>{ c.classList.add("revealed"); c.classList.remove("hidden-def"); });
