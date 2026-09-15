@@ -26,7 +26,7 @@
     background:linear-gradient(120deg,#0d5c56 0%,#0f766e 45%,#12899f 100%);
     color:#fff; padding:22px 20px 16px; box-shadow:0 3px 14px rgba(13,92,86,.25);
   }
-  .hdr-inner{max-width:1280px;margin:0 auto}
+  .hdr-inner{max-width:1280px;margin:0 auto;position:relative;padding-right:150px}
   h1{font-size:1.5rem;letter-spacing:.5px}
   .hdr-sub{font-size:.85rem;opacity:.85;margin-top:4px}
   .hdr-stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
@@ -35,6 +35,17 @@
     border-radius:999px;padding:4px 12px;font-size:.83rem;backdrop-filter:blur(2px);
   }
   .stat b{font-size:1rem;margin-left:3px}
+  .fold-btn{
+    position:absolute;top:10px;right:14px;
+    background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);
+    color:#fff;border-radius:999px;padding:5px 14px;font-size:.85rem;cursor:pointer;
+    transition:background .2s;
+  }
+  .fold-btn:hover{background:rgba(255,255,255,.28)}
+  body.folded .hdr-sub, body.folded .hdr-stats{display:none}
+  body.folded nav.toolbar{display:none}
+  body.folded header{padding:10px 20px}
+  body.folded h1{font-size:1.15rem}
 
   /* ---------- toolbar ---------- */
   .toolbar{
@@ -233,6 +244,7 @@
   <div class="hdr-inner">
     <h1>韩语单词互动学习</h1>
     <div class="hdr-sub">实时发音 · 自测默写 · 闯关刷题 · 艾宾浩斯复习（数据来自你上传的乱序版单词表）</div>
+    <button class="fold-btn" id="foldBtn" title="收起功能区，专心背词">▾ 收起功能区</button>
     <div class="hdr-stats">
       <span class="stat">📚 词汇总量 <b id="statTotal">0</b></span>
       <span class="stat">⭐ 收藏 <b id="statFav">0</b></span>
@@ -409,7 +421,7 @@ const INTERVALS = [1,2,4,7,15,30];
 const DEFAULTS = {
   favs:{}, wb:{}, mastered:{}, review:{},
   study:{totalSec:0, days:{}},
-  settings:{speed:0.9, roma:true, voice:"", hideRomaQuiz:false, selfTest:""}
+  settings:{speed:0.9, roma:true, voice:"", hideRomaQuiz:false, selfTest:"", fold:false}
 };
 const LS_KEY = "krVocab_v1";
 const LS_BAK = "krVocab_v1_bak";
@@ -745,6 +757,13 @@ function bindEvents(){
   });
   $("#voiceSel").addEventListener("change", e=>{
     state.settings.voice = e.target.value; saveState();
+  });
+  $("#foldBtn").addEventListener("click", ()=>{
+    const f = !document.body.classList.contains("folded");
+    document.body.classList.toggle("folded", f);
+    state.settings.fold = f;
+    saveState();
+    $("#foldBtn").textContent = f ? "▴ 展开功能区" : "▾ 收起功能区";
   });
   $("#backupBtn").addEventListener("click", exportBackup);
   $("#restoreBtn").addEventListener("click", ()=>$("#restoreFile").click());
@@ -1082,6 +1101,10 @@ function init(){
   $("#romaToggle").checked = state.settings.roma;
   $("#qHideRoma").checked = !!state.settings.hideRomaQuiz;
   $("#selfTestMode").value = state.settings.selfTest || "";
+  if(state.settings.fold){
+    document.body.classList.add("folded");
+    $("#foldBtn").textContent = "▴ 展开功能区";
+  }
   document.body.classList.remove("self-test-cn","self-test-kr");
   if(state.settings.selfTest) document.body.classList.add("self-test-"+state.settings.selfTest);
   applyQuizRoma();
